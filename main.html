@@ -1,0 +1,493 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Gerenciador de Tarefas - CRUD Firebase</title>
+  <!-- Tailwind CSS -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- FontAwesome Icons -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <!-- Google Fonts Inter -->
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    body {
+      font-family: 'Inter', sans-serif;
+    }
+  </style>
+</head>
+<body class="bg-slate-100 min-h-screen text-slate-800 flex flex-col">
+
+  <!-- Header -->
+  <header class="bg-indigo-600 text-white shadow-md">
+    <div class="max-w-4xl mx-auto px-4 py-4 flex justify-between items-center">
+      <div class="flex items-center space-x-3">
+        <i class="fa-solid fa-list-check text-2xl"></i>
+        <h1 class="text-xl font-bold tracking-wide">CRUD Firebase Simple</h1>
+      </div>
+      <div id="authStatus" class="text-xs bg-indigo-700 px-3 py-1.5 rounded-full flex items-center gap-2">
+        <span class="w-2 h-2 rounded-full bg-yellow-400 animate-pulse" id="statusDot"></span>
+        <span id="statusText">Conectando...</span>
+      </div>
+    </div>
+  </header>
+
+  <!-- Main Content -->
+  <main class="max-w-4xl mx-auto w-full px-4 py-8 flex-grow">
+    
+    <!-- Toast Feedback Message -->
+    <div id="toast" class="hidden mb-4 p-4 rounded-lg shadow-sm transition-all duration-300 flex items-center justify-between">
+      <span id="toastMessage"></span>
+      <button onclick="hideToast()" class="text-sm font-bold opacity-75 hover:opacity-100">&times;</button>
+    </div>
+
+    <!-- Form Panel (Create / Edit) -->
+    <div class="bg-white rounded-xl shadow-sm border border-slate-200 p-6 mb-8">
+      <h2 id="formTitle" class="text-lg font-semibold text-slate-700 mb-4 flex items-center gap-2">
+        <i class="fa-solid fa-plus-circle text-indigo-500"></i> Adicionar Nova Tarefa
+      </h2>
+
+      <form id="crudForm" class="space-y-4">
+        <!-- Hidden Field for Item ID (used when Editing) -->
+        <input type="hidden" id="itemId">
+
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div>
+            <label for="title" class="block text-sm font-medium text-slate-600 mb-1">Título *</label>
+            <input 
+              type="text" 
+              id="title" 
+              required
+              placeholder="Ex: Comprar suprimentos"
+              class="w-full px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all text-sm"
+            >
+          </div>
+
+          <div>
+            <label for="category" class="block text-sm font-medium text-slate-600 mb-1">Categoria</label>
+            <select 
+              id="category" 
+              class="w-full px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all text-sm bg-white"
+            >
+              <option value="Trabalho">Trabalho</option>
+              <option value="Pessoal">Pessoal</option>
+              <option value="Estudos">Estudos</option>
+              <option value="Outros">Outros</option>
+            </select>
+          </div>
+        </div>
+
+        <div>
+          <label for="description" class="block text-sm font-medium text-slate-600 mb-1">Descrição</label>
+          <textarea 
+            id="description" 
+            rows="3" 
+            placeholder="Detalhes opcionais sobre a tarefa..."
+            class="w-full px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all text-sm"
+          ></textarea>
+        </div>
+
+        <div class="flex items-center gap-2 pt-2">
+          <button 
+            type="submit" 
+            id="saveBtn"
+            class="bg-indigo-600 hover:bg-indigo-700 text-white font-medium px-5 py-2.5 rounded-lg text-sm transition-colors flex items-center gap-2 shadow-sm"
+          >
+            <i class="fa-solid fa-floppy-disk"></i> <span id="saveBtnText">Salvar Tarefa</span>
+          </button>
+          
+          <button 
+            type="button" 
+            id="cancelBtn"
+            onclick="resetForm()"
+            class="hidden bg-slate-200 hover:bg-slate-300 text-slate-700 font-medium px-4 py-2.5 rounded-lg text-sm transition-colors"
+          >
+            Cancelar
+          </button>
+        </div>
+      </form>
+    </div>
+
+    <!-- Items List Section -->
+    <div class="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
+      <div class="flex justify-between items-center mb-6">
+        <h2 class="text-lg font-semibold text-slate-700 flex items-center gap-2">
+          <i class="fa-solid fa-list text-indigo-500"></i> Lista de Registros
+        </h2>
+        <span id="itemCount" class="text-xs bg-slate-100 text-slate-600 font-semibold px-2.5 py-1 rounded-full">
+          0 itens
+        </span>
+      </div>
+
+      <!-- Loading Placeholder -->
+      <div id="loading" class="text-center py-8">
+        <div class="inline-block animate-spin rounded-full h-8 w-8 border-4 border-indigo-500 border-t-transparent"></div>
+        <p class="text-sm text-slate-500 mt-2">Carregando dados do Firebase...</p>
+      </div>
+
+      <!-- Empty State -->
+      <div id="emptyState" class="hidden text-center py-8">
+        <i class="fa-regular fa-folder-open text-4xl text-slate-300 mb-2"></i>
+        <p class="text-slate-500 text-sm font-medium">Nenhum registro encontrado.</p>
+        <p class="text-slate-400 text-xs mt-1">Crie um novo item utilizando o formulário acima.</p>
+      </div>
+
+      <!-- Cards Grid / Table -->
+      <div id="itemsContainer" class="grid grid-cols-1 gap-4">
+        <!-- Rendered dynamically -->
+      </div>
+    </div>
+  </main>
+
+  <!-- Footer -->
+  <footer class="bg-white border-t border-slate-200 py-4 mt-auto">
+    <div class="max-w-4xl mx-auto px-4 text-center text-xs text-slate-400">
+      Firebase CRUD Web App &bull; Desenvolvido com HTML, Tailwind CSS & JS ES6
+    </div>
+  </footer>
+
+  <!-- Modal Confirm Delete -->
+  <div id="deleteModal" class="hidden fixed inset-0 bg-slate-900/50 flex items-center justify-center p-4 z-50">
+    <div class="bg-white rounded-xl p-6 max-w-sm w-full shadow-lg">
+      <h3 class="text-lg font-bold text-slate-800 mb-2">Confirmar Exclusão</h3>
+      <p class="text-sm text-slate-600 mb-6">Tem certeza que deseja excluir esta tarefa? Esta ação não pode ser desfeita.</p>
+      <div class="flex justify-end gap-3">
+        <button onclick="closeDeleteModal()" class="px-4 py-2 bg-slate-200 text-slate-700 rounded-lg text-sm font-medium hover:bg-slate-300 transition-colors">Cancelar</button>
+        <button id="confirmDeleteBtn" class="px-4 py-2 bg-red-600 text-white rounded-lg text-sm font-medium hover:bg-red-700 transition-colors">Excluir</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Firebase Integration Script (ES Module) -->
+  <script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+    import { 
+      getAuth, 
+      signInAnonymously, 
+      signInWithCustomToken, 
+      onAuthStateChanged 
+    } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+    import { 
+      getFirestore, 
+      collection, 
+      addDoc, 
+      onSnapshot, 
+      doc, 
+      updateDoc, 
+      deleteDoc, 
+      serverTimestamp 
+    } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+
+    // Configuração fornecida pelo usuário
+    const userProvidedConfig = {
+      apiKey: "AIzaSyAjpQEfKmKnTw1deyzeDM4Wxz0eYn58vEg",
+      authDomain: "teste-crud-510d1.firebaseapp.com",
+      projectId: "teste-crud-510d1",
+      storageBucket: "teste-crud-510d1.firebasestorage.app",
+      messagingSenderId: "883061648403",
+      appId: "1:883061648403:web:7b856c2a6356dc660423e6"
+    };
+
+    // Usar a configuração informada ou fallback do ambiente se necessário
+    const firebaseConfig = (typeof __firebase_config !== 'undefined') 
+      ? JSON.parse(__firebase_config) 
+      : userProvidedConfig;
+
+    const appId = typeof __app_id !== 'undefined' ? __app_id : 'teste-crud-510d1';
+
+    // Inicialização do Firebase
+    const app = initializeApp(firebaseConfig);
+    const auth = getAuth(app);
+    const db = getFirestore(app);
+
+    let currentUser = null;
+    let pendingDeleteId = null;
+
+    // Elementos da Interface
+    const crudForm = document.getElementById('crudForm');
+    const itemIdInput = document.getElementById('itemId');
+    const titleInput = document.getElementById('title');
+    const categoryInput = document.getElementById('category');
+    const descriptionInput = document.getElementById('description');
+    const saveBtnText = document.getElementById('saveBtnText');
+    const cancelBtn = document.getElementById('cancelBtn');
+    const formTitle = document.getElementById('formTitle');
+    const itemsContainer = document.getElementById('itemsContainer');
+    const loading = document.getElementById('loading');
+    const emptyState = document.getElementById('emptyState');
+    const itemCount = document.getElementById('itemCount');
+    const statusDot = document.getElementById('statusDot');
+    const statusText = document.getElementById('statusText');
+
+    // -------------------------------------------------------------
+    // Autenticação & Inicialização
+    // -------------------------------------------------------------
+    async function initAuth() {
+      try {
+        if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
+          await signInWithCustomToken(auth, __initial_auth_token);
+        } else {
+          await signInAnonymously(auth);
+        }
+      } catch (err) {
+        console.error("Erro na autenticação:", err);
+        // Exibe mensagem explicativa de permissão/autenticação
+        statusDot.className = "w-2 h-2 rounded-full bg-rose-400";
+        statusText.textContent = "Sem Acesso (Verifique regras do Firebase)";
+        showToast("Verifique se o método 'Anônimo' está ativado no Firebase Auth.", "error");
+      }
+    }
+
+    onAuthStateChanged(auth, (user) => {
+      if (user) {
+        currentUser = user;
+        statusDot.className = "w-2 h-2 rounded-full bg-emerald-400";
+        statusText.textContent = "Conectado";
+        // Iniciar escuta dos dados em tempo real após autenticado
+        listenToData();
+      } else {
+        currentUser = null;
+        statusDot.className = "w-2 h-2 rounded-full bg-rose-400";
+        statusText.textContent = "Desconectado";
+      }
+    });
+
+    initAuth();
+
+    // -------------------------------------------------------------
+    // OPERAÇÃO: Ler em Tempo Real (READ / Realtime Listener)
+    // -------------------------------------------------------------
+    function listenToData() {
+      if (!currentUser) return;
+
+      // Utilizando coleção 'tasks' simples no Firestore
+      const colRef = collection(db, 'tasks');
+
+      onSnapshot(colRef, 
+        (snapshot) => {
+          loading.classList.add('hidden');
+          const docs = [];
+          
+          snapshot.forEach((docSnapshot) => {
+            docs.push({
+              id: docSnapshot.id,
+              ...docSnapshot.data()
+            });
+          });
+
+          // Ordenar na memória por data (mais recente primeiro)
+          docs.sort((a, b) => {
+            const timeA = a.createdAt?.seconds || 0;
+            const timeB = b.createdAt?.seconds || 0;
+            return timeB - timeA;
+          });
+
+          renderItems(docs);
+        },
+        (error) => {
+          console.error("Erro ao carregar os dados:", error);
+          loading.classList.add('hidden');
+          showToast("Erro de permissão no Firestore. Ajuste as Regras de Segurança no Console.", "error");
+        }
+      );
+    }
+
+    // Renderizar registros na tela
+    function renderItems(items) {
+      itemCount.textContent = `${items.length} ${items.length === 1 ? 'item' : 'itens'}`;
+
+      if (items.length === 0) {
+        emptyState.classList.remove('hidden');
+        itemsContainer.innerHTML = '';
+        return;
+      }
+
+      emptyState.classList.add('hidden');
+      
+      itemsContainer.innerHTML = items.map(item => `
+        <div class="p-4 rounded-lg border border-slate-200 hover:border-indigo-200 bg-slate-50/50 hover:bg-white transition-all flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 group">
+          <div class="space-y-1 w-full">
+            <div class="flex items-center gap-2">
+              <span class="px-2.5 py-0.5 rounded-full text-xs font-semibold ${getCategoryBadgeClass(item.category)}">
+                ${escapeHtml(item.category || 'Geral')}
+              </span>
+              <h3 class="font-semibold text-slate-800 text-base">${escapeHtml(item.title)}</h3>
+            </div>
+            ${item.description ? `<p class="text-sm text-slate-600">${escapeHtml(item.description)}</p>` : ''}
+          </div>
+
+          <div class="flex items-center gap-2 w-full sm:w-auto justify-end border-t sm:border-t-0 pt-2 sm:pt-0 border-slate-100">
+            <button 
+              onclick="window.prepareEdit('${item.id}', \`${escapeJsQuotes(item.title)}\`, \`${escapeJsQuotes(item.category)}\`, \`${escapeJsQuotes(item.description || '')}\`)"
+              class="px-3 py-1.5 text-xs font-medium text-indigo-600 hover:bg-indigo-50 border border-indigo-200 rounded-md transition-colors flex items-center gap-1"
+            >
+              <i class="fa-solid fa-pen"></i> Editar
+            </button>
+            <button 
+              onclick="window.openDeleteModal('${item.id}')"
+              class="px-3 py-1.5 text-xs font-medium text-rose-600 hover:bg-rose-50 border border-rose-200 rounded-md transition-colors flex items-center gap-1"
+            >
+              <i class="fa-solid fa-trash"></i> Excluir
+            </button>
+          </div>
+        </div>
+      `).join('');
+    }
+
+    // Helper de estilização para Categorias
+    function getCategoryBadgeClass(category) {
+      switch (category) {
+        case 'Trabalho': return 'bg-blue-100 text-blue-700';
+        case 'Pessoal': return 'bg-emerald-100 text-emerald-700';
+        case 'Estudos': return 'bg-amber-100 text-amber-700';
+        default: return 'bg-purple-100 text-purple-700';
+      }
+    }
+
+    // -------------------------------------------------------------
+    // OPERAÇÃO: Criar e Atualizar (CREATE / UPDATE)
+    // -------------------------------------------------------------
+    crudForm.addEventListener('submit', async (e) => {
+      e.preventDefault();
+
+      if (!currentUser) {
+        showToast("Você precisa estar autenticado para realizar operações.", "error");
+        return;
+      }
+
+      const id = itemIdInput.value;
+      const title = titleInput.value.trim();
+      const category = categoryInput.value;
+      const description = descriptionInput.value.trim();
+
+      if (!title) return;
+
+      try {
+        if (id) {
+          // UPDATE
+          const docRef = doc(db, 'tasks', id);
+          await updateDoc(docRef, {
+            title,
+            category,
+            description,
+            updatedAt: serverTimestamp()
+          });
+          showToast("Registro atualizado com sucesso!", "success");
+        } else {
+          // CREATE
+          const colRef = collection(db, 'tasks');
+          await addDoc(colRef, {
+            title,
+            category,
+            description,
+            createdAt: serverTimestamp(),
+            userId: currentUser.uid
+          });
+          showToast("Novo registro adicionado com sucesso!", "success");
+        }
+
+        resetForm();
+      } catch (err) {
+        console.error("Erro ao salvar:", err);
+        showToast("Erro de permissão! Verifique as regras no Firebase Console.", "error");
+      }
+    });
+
+    // Preparar o formulário para edição
+    window.prepareEdit = function(id, title, category, description) {
+      itemIdInput.value = id;
+      titleInput.value = title;
+      categoryInput.value = category;
+      descriptionInput.value = description;
+
+      formTitle.innerHTML = `<i class="fa-solid fa-pen-to-square text-indigo-500"></i> Editar Tarefa`;
+      saveBtnText.textContent = "Atualizar Tarefa";
+      cancelBtn.classList.remove('hidden');
+
+      // Scroll para o formulário no mobile
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    };
+
+    // Resetar formulário
+    window.resetForm = function() {
+      itemIdInput.value = '';
+      crudForm.reset();
+      formTitle.innerHTML = `<i class="fa-solid fa-plus-circle text-indigo-500"></i> Adicionar Nova Tarefa`;
+      saveBtnText.textContent = "Salvar Tarefa";
+      cancelBtn.classList.add('hidden');
+    };
+
+    // -------------------------------------------------------------
+    // OPERAÇÃO: Excluir (DELETE)
+    // -------------------------------------------------------------
+    window.openDeleteModal = function(id) {
+      pendingDeleteId = id;
+      document.getElementById('deleteModal').classList.remove('hidden');
+    };
+
+    window.closeDeleteModal = function() {
+      pendingDeleteId = null;
+      document.getElementById('deleteModal').classList.add('hidden');
+    };
+
+    document.getElementById('confirmDeleteBtn').addEventListener('click', async () => {
+      if (!pendingDeleteId || !currentUser) return;
+
+      try {
+        const docRef = doc(db, 'tasks', pendingDeleteId);
+        await deleteDoc(docRef);
+        showToast("Registro excluído com sucesso!", "success");
+      } catch (err) {
+        console.error("Erro ao excluir:", err);
+        showToast("Erro de permissão ao tentar excluir.", "error");
+      } finally {
+        closeDeleteModal();
+      }
+    });
+
+    // -------------------------------------------------------------
+    // Utilities & Helpers
+    // -------------------------------------------------------------
+    window.showToast = function(message, type = 'success') {
+      const toast = document.getElementById('toast');
+      const toastMessage = document.getElementById('toastMessage');
+
+      toastMessage.textContent = message;
+
+      if (type === 'error') {
+        toast.className = "mb-4 p-4 rounded-lg shadow-sm transition-all duration-300 flex items-center justify-between bg-rose-100 text-rose-800 border border-rose-200";
+      } else {
+        toast.className = "mb-4 p-4 rounded-lg shadow-sm transition-all duration-300 flex items-center justify-between bg-emerald-100 text-emerald-800 border border-emerald-200";
+      }
+
+      toast.classList.remove('hidden');
+
+      setTimeout(() => {
+        hideToast();
+      }, 4000);
+    };
+
+    window.hideToast = function() {
+      document.getElementById('toast').classList.add('hidden');
+    };
+
+    function escapeHtml(str) {
+      if (!str) return '';
+      return str.replace(/[&<>"']/g, function(m) {
+        return {
+          '&': '&amp;',
+          '<': '&lt;',
+          '>': '&gt;',
+          '"': '&quot;',
+          "'": '&#039;'
+        }[m];
+      });
+    }
+
+    function escapeJsQuotes(str) {
+      if (!str) return '';
+      return str.replace(/\\/g, '\\\\').replace(/'/g, "\\'").replace(/"/g, '\\"').replace(/`/g, '\\`');
+    }
+  </script>
+</body>
+</html>
